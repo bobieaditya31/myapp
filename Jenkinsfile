@@ -1,5 +1,6 @@
 pipeline {
     agent {
+        label 'docker-agent'
         docker {
             image 'docker:24-dind'
             args '--network kind -v /var/run/docker.sock:/var/run/docker.sock'
