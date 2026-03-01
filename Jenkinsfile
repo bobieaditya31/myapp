@@ -9,7 +9,7 @@ pipeline {
         ARGOCD_PASSWORD = credentials('argocd-password')
         DOCKER_IMAGE = "bobieaditya03/myapp"
         KUBECONFIG = "/home/jenkins/.kube/config"
-        ARGOCD_SERVER = "host.docker.internal:30001"
+        ARGOCD_SERVER = "172.18.0.2:30001"
     }
     
     stages {
