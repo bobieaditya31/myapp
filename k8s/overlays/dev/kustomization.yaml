@@ -9,4 +9,4 @@ resources:
 images:
 - name: myapp
   newName: bobieaditya03/myapp
-  newTag: 12-da9795e
+  newTag: 13-cf2c18a
