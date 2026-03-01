@@ -39,17 +39,29 @@ pipeline {
         
         stage('Test') {
             steps {
+            script {
                 sh """
-                    docker run --rm ${DOCKER_IMAGE}:${BUILD_TAG} python -c "import app; print('Import OK')"
+                # Test 1: Import check
+                docker run --rm ${DOCKER_IMAGE}:${BUILD_TAG} python -c "import app; print('Import OK')"
+                
+                # Test 2: Run container and test inside
+                docker run --rm ${DOCKER_IMAGE}:${BUILD_TAG} sh -c "
+                    # Start gunicorn in background
+                    gunicorn --bind 0.0.0.0:5000 app:app --daemon
                     
-                    # Test with gunicorn in container
-                    docker run --rm --entrypoint sh ${DOCKER_IMAGE}:${BUILD_TAG} -c "
-                        gunicorn --bind 0.0.0.0:5000 app:app &
-                        sleep 3
-                        curl -f http://localhost:5000/health || exit 1
-                        curl -f http://localhost:5000/ || exit 1
-                    "
+                    # Wait for app to be ready
+                    sleep 3
+                    
+                    # Test health endpoint
+                    wget -qO- http://localhost:5000/health || exit 1
+                    echo ' - Health check passed'
+                    
+                    # Test main endpoint
+                    wget -qO- http://localhost:5000/ || exit 1
+                    echo ' - Main endpoint passed'
+                "
                 """
+            }
             }
         }
         
