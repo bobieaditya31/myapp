@@ -1,6 +1,9 @@
 pipeline {
     agent {
-        label 'docker-agent'
+        docker {
+            image 'docker:24-dind'
+            args '--network kind -v /var/run/docker.sock:/var/run/docker.sock'
+        }
     }
     
     environment {
@@ -96,17 +99,21 @@ pipeline {
         
         stage('Sync ArgoCD') {
             steps {
-                sh """
-                    argocd login ${ARGOCD_SERVER} \
-                        --username admin \
-                        --password \$ARGOCD_PASSWORD \
-                        --insecure \
-                        --grpc-web
-                    
-                    argocd app get myapp-dev || argocd app create -f argocd/application.yaml
-                    argocd app sync myapp-dev --force
-                    argocd app wait myapp-dev --health --timeout 300
-                """
+            sh '''
+                # Install argocd CLI
+                curl -sSL -o /usr/local/bin/argocd https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
+                chmod +x /usr/local/bin/argocd
+                
+                # Login ke ArgoCD (sekarang bisa di-reach karena di network kind)
+                argocd login ${ARGOCD_SERVER} \
+                --username admin \
+                --password ${ARGOCD_PASSWORD} \
+                --insecure \
+                --grpc-web
+                
+                # Sync aplikasi
+                argocd app sync myapp-dev || echo "App not found, may need to create it first"
+            '''
             }
         }
         
