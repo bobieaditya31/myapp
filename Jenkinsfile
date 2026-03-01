@@ -89,7 +89,7 @@ pipeline {
                     git add k8s/overlays/dev/kustomization.yaml
                     git commit -m "Update image to ${BUILD_TAG} [ci skip]" || echo "No changes"
                     
-                    git push https://\$GITHUB_USR:\$GITHUB_PSW@github.com/YOUR_USERNAME/myapp.git HEAD:main
+                    git push https://\$GITHUB_USR:\$GITHUB_PSW@github.com/bobieaditya31/myapp.git HEAD:main
                 """
             }
         }
