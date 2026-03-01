@@ -1,6 +1,6 @@
 from flask import Flask
-import socket
 import os
+import socket
 
 app = Flask(__name__)
 
@@ -8,15 +8,14 @@ app = Flask(__name__)
 def hello():
     hostname = socket.gethostname()
     return f"""
-    <h1>Hello from DevOps Home Lab!</h1>
+    <h1>Hello from Jenkins + ArgoCD + Kind!</h1>
     <p>Pod: {hostname}</p>
-    <p>Version: 1.0</p>
+    <p>Version: v1.0</p>
     """
 
 @app.route('/health')
 def health():
-    return {"status": "healthy"}
+    return {"status": "healthy", "service": "myapp"}
 
 if __name__ == '__main__':
-    port = os.environ.get('PORT', '5000')
-    app.run(host='0.0.0.0', port=int(port))
+    app.run(host='0.0.0.0', port=5000)
