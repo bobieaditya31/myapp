@@ -7,7 +7,7 @@ pipeline {
         DOCKER_HUB = credentials('docker-hub-credentials')
         GITHUB = credentials('github-credentials')
         ARGOCD_PASSWORD = credentials('argocd-password')
-        DOCKER_IMAGE = "bobiaditya03/myapp"
+        DOCKER_IMAGE = "YOUR_DOCKERHUB_USERNAME/myapp"
         KUBECONFIG = "/home/jenkins/.kube/config"
         ARGOCD_SERVER = "host.docker.internal:30001"
     }
@@ -42,10 +42,13 @@ pipeline {
                 sh """
                     docker run --rm ${DOCKER_IMAGE}:${BUILD_TAG} python -c "import app; print('Import OK')"
                     
-                    docker run -d --name test-${BUILD_NUMBER} -p 5001:5000 ${DOCKER_IMAGE}:${BUILD_TAG}
-                    sleep 5
-                    curl -f http://localhost:5001/health || (docker logs test-${BUILD_NUMBER} && exit 1)
-                    docker stop test-${BUILD_NUMBER} && docker rm test-${BUILD_NUMBER}
+                    # Test with gunicorn in container
+                    docker run --rm --entrypoint sh ${DOCKER_IMAGE}:${BUILD_TAG} -c "
+                        gunicorn --bind 0.0.0.0:5000 app:app &
+                        sleep 3
+                        curl -f http://localhost:5000/health || exit 1
+                        curl -f http://localhost:5000/ || exit 1
+                    "
                 """
             }
         }
