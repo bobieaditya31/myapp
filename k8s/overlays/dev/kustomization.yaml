@@ -4,9 +4,9 @@ kind: Kustomization
 namespace: dev
 
 resources:
-  - ../../base
+- ../../base
 
 images:
-  - name: myapp
-    newName: YOUR_DOCKERHUB_USERNAME/myapp
-    newTag: latest
+- name: myapp
+  newName: bobieaditya03/myapp
+  newTag: 12-da9795e
