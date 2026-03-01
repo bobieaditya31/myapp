@@ -1,19 +1,14 @@
 pipeline {
     agent {
-        label 'docker-agent'
-        docker {
-            image 'docker:24-dind'
-            args '--network kind -v /var/run/docker.sock:/var/run/docker.sock'
-        }
+        label 'docker-agent'  // atau label node yang punya docker
     }
     
     environment {
         DOCKER_HUB = credentials('docker-hub-credentials')
         GITHUB = credentials('github-credentials')
         ARGOCD_PASSWORD = credentials('argocd-password')
-        DOCKER_IMAGE = "bobieaditya03/myapp"
-        KUBECONFIG = "/home/jenkins/.kube/config"
-        ARGOCD_SERVER = "172.18.0.2:30001"
+        GIT_REPO = 'bobieaditya31/myapp'
+        DOCKER_IMAGE = 'bobieaditya03/myapp'
     }
     
     stages {
@@ -22,126 +17,104 @@ pipeline {
                 cleanWs()
                 checkout scm
                 script {
-                    env.GIT_COMMIT_SHORT = sh(
-                        script: 'git rev-parse --short HEAD',
-                        returnStdout: true
-                    ).trim()
-                    env.BUILD_TAG = "${BUILD_NUMBER}-${GIT_COMMIT_SHORT}"
+                    env.GIT_COMMIT_SHORT = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+                    env.BUILD_TAG = "${env.BUILD_NUMBER}-${env.GIT_COMMIT_SHORT}"
                 }
             }
         }
         
         stage('Build Docker Image') {
             steps {
-                sh """
+                sh '''
                     cd src
                     docker build -t ${DOCKER_IMAGE}:${BUILD_TAG} .
                     docker tag ${DOCKER_IMAGE}:${BUILD_TAG} ${DOCKER_IMAGE}:latest
-                """
+                '''
             }
         }
         
         stage('Test') {
             steps {
-            script {
-                sh """
-                # Test 1: Import check
-                docker run --rm ${DOCKER_IMAGE}:${BUILD_TAG} python -c "import app; print('Import OK')"
-                
-                # Test 2: Run container and test inside
-                docker run --rm ${DOCKER_IMAGE}:${BUILD_TAG} sh -c "
-                    # Start gunicorn in background
-                    gunicorn --bind 0.0.0.0:5000 app:app --daemon
-                    
-                    # Wait for app to be ready
-                    sleep 3
-                    
-                    # Test health endpoint
-                    wget -qO- http://localhost:5000/health || exit 1
-                    echo ' - Health check passed'
-                    
-                    # Test main endpoint
-                    wget -qO- http://localhost:5000/ || exit 1
-                    echo ' - Main endpoint passed'
-                "
-                """
-            }
+                script {
+                    sh '''
+                        docker run --rm ${DOCKER_IMAGE}:${BUILD_TAG} python -c "import app; print('Import OK')"
+                        
+                        docker run --rm ${DOCKER_IMAGE}:${BUILD_TAG} sh -c "
+                            gunicorn --bind 0.0.0.0:5000 app:app --daemon
+                            sleep 3
+                            wget -qO- http://localhost:5000/health || exit 1
+                            echo ' - Health check passed'
+                            wget -qO- http://localhost:5000/ || exit 1
+                            echo ' - Main endpoint passed'
+                        "
+                    '''
+                }
             }
         }
         
         stage('Push to Docker Hub') {
             steps {
-                sh """
-                    echo \$DOCKER_HUB_PSW | docker login -u \$DOCKER_HUB_USR --password-stdin
+                sh '''
+                    echo ${DOCKER_HUB_PSW} | docker login -u ${DOCKER_HUB} --password-stdin
                     docker push ${DOCKER_IMAGE}:${BUILD_TAG}
                     docker push ${DOCKER_IMAGE}:latest
                     docker logout
-                """
+                '''
             }
         }
         
         stage('Update Manifests') {
             steps {
-                sh """
+                sh '''
                     git config --global user.email "jenkins@homelab.local"
                     git config --global user.name "Jenkins CI"
                     
                     cd k8s/overlays/dev
                     kustomize edit set image myapp=${DOCKER_IMAGE}:${BUILD_TAG}
-                    
                     cd ../../..
-                    git add k8s/overlays/dev/kustomization.yaml
-                    git commit -m "Update image to ${BUILD_TAG} [ci skip]" || echo "No changes"
                     
-                    git push https://\$GITHUB_USR:\$GITHUB_PSW@github.com/bobieaditya31/myapp.git HEAD:main
-                """
+                    git add k8s/overlays/dev/kustomization.yaml
+                    git commit -m "Update image to ${BUILD_TAG} [ci skip]"
+                    git push https://${GITHUB}@github.com/${GIT_REPO}.git HEAD:main
+                '''
             }
         }
         
         stage('Sync ArgoCD') {
             steps {
-            sh '''
-                # Install argocd CLI
-                curl -sSL -o /usr/local/bin/argocd https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
-                chmod +x /usr/local/bin/argocd
-                
-                # Login ke ArgoCD (sekarang bisa di-reach karena di network kind)
-                argocd login ${ARGOCD_SERVER} \
-                --username admin \
-                --password ${ARGOCD_PASSWORD} \
-                --insecure \
-                --grpc-web
-                
-                # Sync aplikasi
-                argocd app sync myapp-dev || echo "App not found, may need to create it first"
-            '''
-            }
-        }
-        
-        stage('Verify') {
-            steps {
-                sh """
-                    kubectl get pods -n dev
-                    kubectl get svc -n dev
-                """
+                sh '''
+                    # Install argocd CLI jika belum ada
+                    if ! command -v argocd &> /dev/null; then
+                        curl -sSL -o /usr/local/bin/argocd https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
+                        chmod +x /usr/local/bin/argocd
+                    fi
+                    
+                    argocd login 172.18.0.2:30001 \
+                        --username admin \
+                        --password ${ARGOCD_PASSWORD} \
+                        --insecure \
+                        --grpc-web
+                    
+                    argocd app sync myapp-dev || true
+                '''
             }
         }
     }
     
     post {
         always {
-            sh """
+            sh '''
                 docker rmi ${DOCKER_IMAGE}:${BUILD_TAG} || true
                 docker rmi ${DOCKER_IMAGE}:latest || true
-                docker ps -aq --filter "name=test-${BUILD_NUMBER}" | xargs -r docker rm -f || true
-            """
+                docker ps -aq --filter name=test-${BUILD_NUMBER} | xargs -r docker rm -f || true
+            '''
             cleanWs()
         }
         success {
-            echo "✅ SUCCESS! App: http://localhost:30000"
+            echo '✅ SUCCESS!'
         }
         failure {
-            echo "❌ FAILED!"
+            echo '❌ FAILED!'
         }
     }
 }
