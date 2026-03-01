@@ -7,7 +7,7 @@ pipeline {
         DOCKER_HUB = credentials('docker-hub-credentials')
         GITHUB = credentials('github-credentials')
         ARGOCD_PASSWORD = credentials('argocd-password')
-        DOCKER_IMAGE = "bobiaditya03/myapp"
+        DOCKER_IMAGE = "bobieaditya03/myapp"
         KUBECONFIG = "/home/jenkins/.kube/config"
         ARGOCD_SERVER = "host.docker.internal:30001"
     }
